@@ -1,0 +1,113 @@
+import pandas as pd
+import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+from time import time
+from sklearn.preprocessing import MinMaxScaler
+
+from keras.models import Sequential
+from keras.layers import InputLayer, Dense
+from keras.layers import LSTM
+
+#144개 데이터
+MY_PAST=12
+MY_SPLIT=0.9
+MY_UNIT =500 #내부 구조 차원수
+MY_SHAPE=(MY_PAST,1)
+
+MY_EPOCH =450
+MY_BATCH=64
+
+np.set_printoptions(precision=3)
+
+
+raw=pd.read_csv('/content/airline.csv',header=None,usecols=[1])
+
+#plt.plot(raw)
+#plt.show()# 시계열 데이터 시각화
+
+print("원본 데이터 샘플 13개")
+print(raw.head(13))
+
+print("\n원본 데이터 통계")
+print(raw.describe())
+
+scaler =MinMaxScaler()
+s_data=scaler.fit_transform(raw)
+
+print("\nMinMax 정규화 형식:", type(s_data))
+
+df=pd.DataFrame(s_data)
+print("정규화 데이터 샘플 13개")
+print(df.head(13))
+
+print("\정규화 데이터 통계")
+print(df.describe())
+
+bundle=[]
+for i in range(len(s_data)-MY_PAST):
+  bundle.append(s_data[i: i+MY_PAST+1])
+
+  print("\n총 13개 묶음의 수:",len(bundle))
+print(bundle[0])
+print(bundle[1])
+
+#numpy로 전환
+print('분할 데이터의 타입:', type(bundle))
+bundle=np.array(bundle)
+
+X_data=bundle[:,:MY_PAST]
+Y_data=bundle[:,-1]
+
+split=int(len(bundle)*MY_SPLIT)
+X_train=X_data[:split]
+X_test=X_data[split:]
+Y_train=Y_data[:split]
+Y_test=Y_data[split:]
+
+
+print("\n학습용 입력 데이터 모양:", X_train.shape)
+print("학습용 출력 데이터 모양:", Y_train.shape)
+print("평가용 입력 데이터 모양:", X_test.shape)
+print("평가용 출력 데이터 모양:", Y_test.shape)
+
+
+model=Sequential()
+model.add(InputLayer(input_shape=MY_SHAPE))
+model.add(LSTM(MY_UNIT))
+
+
+
+model.add(Dense(1, activation="sigmoid"))
+
+print("\nRNN 요약")
+model.summary()
+
+model.compile(optimizer="rmsprop", loss= 'mse')
+
+begin = time()
+print("\nRNN 학습 시작")
+
+model.fit(X_train,Y_train,epochs=MY_EPOCH, batch_size=MY_BATCH,verbose=1)
+end=time()
+print("총 학습 시간: {:.1f}초".format(end- begin))
+
+loss=model.evaluate(X_test,Y_test,verbose=0)
+print(" 최종 MSE 손실값: {:.3f}",format(loss))
+
+
+pred=model.predict(X_test)
+pred=scaler.inverse_transform(pred)
+pred=pred.flatten().astype(int)
+print("\n정답 원본:",pred)
+
+truth=scaler.inverse_transform(Y_test)
+truth=truth.flatten().astype(int)
+print("\n정답 원본:",truth)
+
+axes=plt.gca()
+axes.set_ylim([0,650])
+
+sns.lineplot(data=pred, label="pred",color="blue")
+sns.lineplot(data=truth, label="truth",color="red")
+plt.show()
