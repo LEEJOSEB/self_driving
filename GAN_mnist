@@ -1,0 +1,220 @@
+import matplotlib.pyplot as plt
+import numpy as np 
+from time import time
+import os
+import glob
+
+from keras.datasets import mnist
+from keras.layers import Dense, Flatten , Reshape
+from keras.layers import LeakyReLU
+from keras.models import Sequential
+
+
+MY_GEN= 256
+MY_DIS =400
+MY_NOISE = 100
+
+MY_SHAPE =(28,28,1)
+MY_EPOCH = 10000
+MY_BATCH = 64
+
+MY_FOLDER = 'output/'
+os.makedirs(MY_FOLDER, exist_ok = True)
+
+for f in glob.glob(MY_FOLDER + '*'):
+  os.remove(f)
+
+###데이터 준비
+
+def read_data():
+  (X_train, Y_train),(_,_)=mnist.load_data()
+  print('데이터 모양:', Y_train.shape)
+  
+  
+
+      
+
+
+
+
+  
+  #plt.imshow(X_train[0], cmap='gray')
+  #plt.show()
+  X_train=X_train / 127.5 - 1.0
+  
+  print('데이터 모양:', X_train.shape)
+  return X_train, Y_train
+
+
+#생성자 설계
+def build_generator():
+  model =Sequential()
+
+  model.add(Dense(MY_GEN, input_dim = MY_NOISE))
+  model. add(LeakyReLU(alpha=0.01))
+
+  #은닉층 2
+  model.add(Dense(MY_GEN))
+  model. add(LeakyReLU(alpha=0.01))
+
+  #은닉층 3
+  #tanh 활성화는 [-1,1]스케일링 떄문
+  model.add(Dense(28*28*1, activation= 'tanh'))
+  model.add(Reshape(MY_SHAPE))
+
+
+  print('\n생성자 요약')
+  model.summary()
+  
+  return model
+
+#감별자 설계
+def build_discriminator():
+  model = Sequential()
+
+  model.add(Flatten(input_shape = MY_SHAPE))
+  model.add(Dense(MY_DIS))
+  model.add(LeakyReLU(alpha=0.01))
+
+  model.add(Dense(64))
+  model. add(LeakyReLU(alpha=0.01))
+
+  
+  model.add(Dense(1,activation='sigmoid'))
+  print('\n감별자 요약')
+  
+
+  model.summary()
+
+  return model
+
+
+
+def build_GAN():
+   model= Sequential()
+
+   generator = build_generator()
+
+   discriminator = build_discriminator()
+
+   discriminator.compile(optimizer= 'adam', loss='binary_crossentropy',metrics=['acc'])
+
+   discriminator.trainable = False
+
+   model.add(generator)
+   model.add(discriminator)
+   model.compile(optimizer= 'adam', loss='binary_crossentropy')
+
+   print("\nGAN 요약")
+   model.summary()
+   return discriminator, generator, model
+
+#build_GAN()
+
+#감별자 학습
+def train_discriminator():
+  
+  total = X_train.shape[0]
+  pick=np.random.randint(0,total,MY_BATCH)
+  image=X_train[pick]
+
+
+  all_1 = np.ones((MY_BATCH,1))
+  d_loss_real = discriminator.train_on_batch(image, all_1) 
+
+
+  noise = np.random.normal(0,1,(MY_BATCH, MY_NOISE))
+  fake =generator.predict(noise)
+  all_0 = np.zeros((MY_BATCH,1))
+
+  d_loss_fake = discriminator.train_on_batch(fake , all_0)
+
+  
+    #plt.imshow(fake.shape[0], cmap='gray')
+  #plt.show()
+
+  d_loss_fake = discriminator.train_on_batch(fake, all_0)
+
+  d_loss = 0.5 * np.add(d_loss_real, d_loss_fake)
+
+  #print(d_loss_real)
+  #print(fake.shape)
+  #print(all_0.shape)
+  #print(d_loss_fake)
+  #print(d_loss)
+
+
+
+  return d_loss
+
+def train_generator():
+
+  noise = np.random.normal(0,1,(MY_BATCH ,MY_NOISE))
+
+  all_1=np.ones((MY_BATCH,1))
+  g_loss =gan.train_on_batch(noise, all_1)
+
+ #print(g_loss)
+
+  return g_loss
+
+
+def sample(epoch):
+  row = col = 4
+
+  noise = np.random.normal(0,1, (row*col,MY_NOISE))
+
+  fake= generator.predict(noise)
+  fake=np.squeeze(fake)
+  #print(fake.shape)
+  flg, spot = plt.subplots(row, col)
+
+  cnt=0
+  for i in range(row):
+    for j in range(col):
+      spot[i,j].imshow(fake[cnt], cmap='gray')
+      spot[i,j].axis('off')
+      cnt+=1
+  
+  path = os.path.join(MY_FOLDER, 'img-{}'.format(epoch))
+  plt.savefig(path)
+  plt.close()
+
+def train_GAN():
+  begin= time()
+  print('\n학습시작')
+  
+  for epoch in range(MY_EPOCH +1):
+    d_loss = train_discriminator()
+    g_loss = train_generator()
+    
+
+    if epoch % 50 ==0:
+      print('에포크:',epoch, 
+            '생성자 손실: {:.3f}'.format(g_loss),
+            '감별자 손실: {:3f}'.format(d_loss[0]),
+            '감별자 정확도: {:.1f}%'.format(d_loss[1]*100))
+      sample(epoch)
+  end = time()
+  print('최종 학습 시간: {:.1f}초'.format(end-begin))
+
+
+            
+
+#데이터 준비
+X_train, Y_train = read_data()
+X=[]
+
+for i in range(60000):
+  if Y_train[i]==7:
+    X.append(X_train[i])
+X_train = X
+X_train = np.expand_dims(X_train, axis=3)
+print(X_train.shape)
+
+#GAN구현
+discriminator, generator,gan = build_GAN()
+
+#GAN 학습
+train_GAN()
+
