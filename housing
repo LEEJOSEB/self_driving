@@ -1,0 +1,131 @@
+#파이썬 패키지 가져오기
+
+import pandas as pd  #2차원 테이블 패키지
+import matplotlib.pyplot as plt #시각화(그래프,도표)
+import seaborn as sns
+from time import time #시간이 얼마나 걸리는지 계싼
+from keras.models import Sequential
+from keras.layers import Dense ,Dropout
+
+from sklearn.preprocessing import StandardScaler #데이터 정규화를 위해 z점수 정규화
+from sklearn.model_selection import train_test_split #데이터를 학습용과 평가용으로 나눔
+
+#하이퍼 파라미터
+
+MY_EPOCH = 1000 #학습 반복횟수
+MY_BATCH = 16 #데이터 몇개씩 가져와서 처리할지
+
+### 데이터 준비 ####
+
+#데이터 파일 읽기
+#결과는 pandas데이터 프레임 형식 
+heading = ['CRIM', 'ZN','INDUS','CHAS','NOX','RM','AGE','DIS','RAD','TAX','PTRATIO','LSTAT','MEDV']
+raw = pd.read_csv('/content/drive/MyDrive/dataset/housing.csv') #가공 되지 않은 데이터를 raw로 칭함
+raw=raw.drop('CHAS',axis=1)
+heading.pop(3)
+
+
+
+#데이터 원본 출력
+
+print('원본데이터 샘플 10개')
+print(raw.head(10)) #앞의 10개 데이터 샘플
+
+print('원ㄴ본 데이터 통계')
+print(raw.describe()) #데이터의 평균,중앙값 등등등
+
+# z 점수 정규화
+
+# 겨로가는 numpy의 n차원 행렬 형식
+scaler = StandardScaler()
+z_data = scaler.fit_transform(raw)
+
+#fit_transform은 입력을 데이터 프레임으로 받으면 출력을 numpy행렬로 출력함
+
+#numpy에서 pandas로 전환
+#header 정보 복구 필요
+z_data = pd.DataFrame(z_data,columns = heading)
+
+#데이터를 입력과 출력으로 분리
+
+print('\n 분리전 데이터 모양  ', z_data.shape)
+#506개의 데이터와 13가지 종류의 데이타가 나옴
+X_data = z_data.drop('MEDV',axis = 1) #1은 열을 없앰 , 집값 열 없애기
+Y_data = z_data['MEDV'] # 집값 열 따로 기록
+
+
+#데이터를 학습용과 평가용으로 분리
+X_train,X_test,Y_train,Y_test = train_test_split(X_data,Y_data,test_size = 0.3)
+#데이터 변수들 순서 중요!, test_size : 30% 데이터 무작위 추출해 평가용으로분리
+
+
+
+
+### 인공 신경망 구현 ###
+
+#케라스 DNN 구현
+model = Sequential()
+input = X_train.shape[1] #학습용 데이터 (354,12) #여기서 1인덱스를 가져가서 저장
+model.add(Dense(200,
+                input_dim=input,kernel_initializer='glorot_normal',
+                activation = 'relu'))
+#입력층과 은닉층1 을 한번에 추가 
+
+model.summary()
+#None : 현재 배치 데이터 표현 
+
+
+#은닉층 2,3 추가
+model.add(Dense(1000,kernel_initializer='glorot_normal',
+                activation = 'relu'))
+model.add(Dropout(0.3))
+model.add(Dense(500,kernel_initializer='glorot_normal',
+                activation = 'relu'))
+model.add(Dropout(0.3))
+model.add(Dense(250,kernel_initializer='glorot_normal',
+                activation = 'relu'))
+model.add(Dense(100,kernel_initializer='glorot_normal',
+                activation = 'relu'))
+
+#출력층 추가
+model.add(Dense(1))
+
+model.summary()
+
+####인공 신경망 학습 #####
+
+#최적화 함수와 손실함수 지정
+model.compile(optimizer = 'sgd',
+              loss = 'mse')
+
+print('DNN학습시작')
+begin = time()
+
+model.fit(X_train,
+          Y_train,
+          epochs = MY_EPOCH,
+          batch_size = MY_BATCH, #데이터를 나눠서 처리하기 
+          verbose = 1 #학습 결과 출력 , 0이면 출력x 
+          )
+
+end = time()
+print('총학습시간: {:.1f}초'.format( end - begin ))
+
+### 인공 신경망 평가 및 활용 ###
+
+#신경망 평가 및 손실값 계산
+loss = model.evaluate(X_test,
+                      Y_test,
+                      verbose = 1)
+
+print('DNN 평균 제곱 오차 (MSE): {:.2f}'.format(loss))
+
+
+
+#신경망 활용 및 산포도 출력
+pred =model.predict(X_test)
+sns.regplot(x=Y_test,y = pred)
+
+plt.xlabel("actual values")
+plt.ylabel("predicted_values")
+plt.show()
